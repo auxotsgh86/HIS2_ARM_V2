@@ -126,7 +126,7 @@ Pub/Sub 與 SignalR 在過渡期可以保留，但只作為提前清除本機快
 
 完成後，SignalR 的 Auth Cache 清除只剩效能用途，不再承擔正確性。
 
-### Phase 4：MenuCache 與 JWT 角色新鮮度
+### Phase 4：MenuCache 與「UserId 為入口」的權限查詢
 
 MenuCache 必須使用同一個 `perm_ver:{userId}`：
 
@@ -135,24 +135,63 @@ MenuCache 必須使用同一個 `perm_ver:{userId}`：
 - 版本不符時清除舊選單並重新取得。
 - 使用者 Token 必須以明確的 Bearer Token 傳給 `ArmVerifyClient`，不得轉送整個 Cookie Header，也不得使用未註冊的 HttpClient 名稱。
 
-**必須區分「角色權限內容異動」與「使用者角色集合異動」，兩者對 JWT 的依賴不同。**
+#### 4.1 目標原則：JWT 識別 User，權限由權威資料來源決定
 
-目前 `MenuService.GetUserMenuTreeAsync()` 的實際流程是：
+目標架構應逐步採用：
 
-1. 從 JWT 的 `ClaimTypes.Role` 取得 RoleIds。
-2. 使用這些 RoleIds 查詢 Oracle 目前的 `ARM_PERMISSIONS` 資料。
-3. 依目前資料中的有效狀態與 Read Bit 組出選單。
+- JWT 保留經驗證所需的身分資訊，核心識別為 `UserId`。
+- MenuService 不再把 JWT 的 `RoleIds` Claim 當成角色集合的權威來源。
+- 由已驗證的 `UserId` 查詢目前有效的使用者角色，再依角色查詢目前有效的權限與選單。
+- Oracle 是權限資料的 Source of Truth；Valkey / Memory Cache 僅是有版本控制的效能層，不得成為另一份獨立權限事實。
+- 查詢有效角色時，必須同時檢查 User、UserRole 與 Role 的有效狀態；查詢有效權限時，必須檢查 Permission 的有效狀態。
 
-因此：
+因此，目標資料流為：
 
-- **RolePermissionChanged（既有角色的功能權限異動）**：JWT 中的 RoleIds 不需要改變。只要重新呼叫 Menu API，SQL 就會讀取 Oracle 已提交的最新 `ARM_PERMISSIONS`，選單結果就是最新權限。單純修改角色的 PERMS_BITS，不需要為此刷新 Token。
-- **UserRoleChanged（使用者新增／移除角色）**：JWT 中的 RoleIds 是簽發時快照。舊 Token 不會自動包含新角色，也不會自動移除舊角色。此情境才需要刷新 Token，或讓 Menu API 依已驗證的 UserId 從權威資料來源取得最新有效 RoleIds。
-- **RoleStatusChanged（角色啟用／停用）**：目前選單 SQL 沒有 JOIN `ARM_ROLES` 檢查角色的 `IS_ACTIVE`。應確認停用角色不會因舊 JWT Role Claim 而繼續貢獻選單；可在選單查詢中排除停用角色，或由服務端先取得最新有效 RoleIds。
-- **ActionRequirementChanged（API 門檻異動）**：目前選單 SQL 主要依 `ARM_PERMISSIONS` 的 Read Bit 判斷顯示，沒有直接查詢 `ARM_ACTION_DEF`。因此 Action 門檻異動是否改變選單呈現，須依實際 UI 規則決定；它仍可能需要使授權快取失效，但不能假設一定改變選單內容。
+```text
+已驗證 JWT
+    │
+    ▼
+UserId
+    │
+    ▼
+目前有效的 ARM_USER_ROLES
+    │
+    ▼
+目前有效的 ARM_ROLES
+    │
+    ▼
+目前有效的 ARM_PERMISSIONS
+    │
+    ▼
+依 Read Bit 與選單設定產生 Menu Tree
+```
 
-另外，以上「重新呼叫 Menu API」的前提是確實打到 API。子系統的 `MenuCacheService` 目前另有以 UserId 為 Key、TTL 5 分鐘的本機快取；快取命中時不會呼叫 Menu API。因此移除 SignalR 後，仍須讓 MenuCache 透過 `perm_ver:{userId}` 察覺相關異動，才能在下一次取用時丟棄舊選單並重新呼叫 API。
+這代表「既有角色的權限內容異動」與「使用者角色集合異動」，在選單查詢上都可以由 UserId 重新查詢權威資料來源反映，不必依賴 JWT 內的 RoleIds 快照，也不需要為了更新選單而重新簽發 Access Token。
 
-實作時不要把所有權限異動都當成 JWT RoleIds 過期。應只有角色集合／角色有效狀態來源改變時，才處理 Role Claims 的新鮮度；角色權限內容異動則由重新查詢 Oracle 的權限表反映。
+#### 4.2 目前程式碼與遷移要求
+
+目前程式碼尚未達成上述目標：
+
+- `TokenService.GenerateAccessToken(User user)` 目前仍將 `user.RoleIds` 寫入 `ClaimTypes.Role`。
+- `MenuService.GetUserMenuTreeAsync(userId)` 目前忽略傳入的 `userId` 作為角色查詢入口，改從 `HttpContext.User.Claims` 讀取 RoleIds，再以 `ROLE_ID IN :RoleIds` 查詢 `ARM_PERMISSIONS`。
+- 因此目前 UserRoleChanged 後，舊 Token 的 RoleIds 仍會影響選單結果；單純重新呼叫 Menu API 並不能保證取得最新角色集合。
+
+後續應調整 MenuService，使用參數中的已驗證 UserId，透過 Oracle 查詢有效角色及其權限。SQL 應以 `ARM_USER_ROLES` 為角色集合入口，並 JOIN / EXISTS 檢查 `ARM_USERS`、`ARM_ROLES`、`ARM_PERMISSIONS` 的有效狀態。實際欄位與軟刪除條件需依既有 Schema 確認，不可直接假設欄位名稱。
+
+`TokenService` 的 Role Claims 不應在尚未盤點所有消費者前直接刪除。應先搜尋並遷移所有讀取 `ClaimTypes.Role` 的授權、快取鍵、選單與其他程式碼；確認不再依賴後，再決定是否停止簽發 Role Claims。遷移期間可以暫時保留 Role Claims 作為相容資料，但不得讓它成為最新權限判斷的權威來源。
+
+#### 4.3 PermissionVersion 的責任
+
+採用 UserId 查詢最新角色，不代表可以移除 PermissionVersion：
+
+- Oracle / Valkey 的權限資料可能已更新，但子系統 L0 MenuCache 仍可能保存舊選單。
+- `perm_ver:{userId}` 用來讓 L0 / L1 快取知道其依據的權限資料是否已變更。
+- 版本不同時，丟棄舊選單並重新呼叫 Menu API；MenuService 再依 UserId 查詢最新有效角色與權限。
+- 角色集合異動、角色權限異動、角色啟用／停用等會改變有效權限的事件，都必須使受影響使用者的版本遞增。
+
+因此 PermissionVersion 管理的是「快取是否仍有效」，不是用來讓 JWT 角色快照保持同步。
+
+選單是 UI 呈現；後端 API 授權仍必須以最新有效權限為準，不能以選單是否顯示作為安全邊界。
 
 ### Phase 5：ARM L1 Cache 版本比對
 
