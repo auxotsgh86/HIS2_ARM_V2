@@ -309,7 +309,7 @@ namespace HIS2.ARM.Client.Middlewares
             string action,
             CancellationToken cancellationToken = default)
         {
-            var client = _httpClientFactory.CreateClient("ArmClient");
+            var client = _httpClientFactory.CreateClient("ArmVerifyClient");
 
             // 💡 直接在這裡賦予單獨的 Timeout 時間 (例如 3 分鐘)
             // 這樣就不需要去 Program.cs 註冊了，邏輯高度內聚！
