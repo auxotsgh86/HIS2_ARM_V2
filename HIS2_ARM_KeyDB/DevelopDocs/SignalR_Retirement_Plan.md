@@ -135,17 +135,24 @@ MenuCache 必須使用同一個 `perm_ver:{userId}`：
 - 版本不符時清除舊選單並重新取得。
 - 使用者 Token 必須以明確的 Bearer Token 傳給 `ArmVerifyClient`，不得轉送整個 Cookie Header，也不得使用未註冊的 HttpClient 名稱。
 
-**此階段有一個必須先決定的業務問題：JWT 的 RoleIds 是簽發時快照。**
+**必須區分「角色權限內容異動」與「使用者角色集合異動」，兩者對 JWT 的依賴不同。**
 
-目前 `MenuService` 從 JWT Role Claims 取得角色。即使 MenuCache 因版本改變而重載，如果仍使用舊 Access Token，取得的選單仍可能是舊角色的結果。
+目前 `MenuService.GetUserMenuTreeAsync()` 的實際流程是：
 
-實作前必須選定其中一種策略：
+1. 從 JWT 的 `ClaimTypes.Role` 取得 RoleIds。
+2. 使用這些 RoleIds 查詢 Oracle 目前的 `ARM_PERMISSIONS` 資料。
+3. 依目前資料中的有效狀態與 Read Bit 組出選單。
 
-A. 權限版本不符時，先透過既有 Refresh Token 流程取得新 Access Token，再重新載入選單；必須確認 Refresh 流程會重新讀取最新 RoleIds。
+因此：
 
-B. Menu API 以已驗證的 UserId 查詢最新有效 RoleIds，不再以 Access Token 中的 Role Claims 作為選單資料來源。
+- **RolePermissionChanged（既有角色的功能權限異動）**：JWT 中的 RoleIds 不需要改變。只要重新呼叫 Menu API，SQL 就會讀取 Oracle 已提交的最新 `ARM_PERMISSIONS`，選單結果就是最新權限。單純修改角色的 PERMS_BITS，不需要為此刷新 Token。
+- **UserRoleChanged（使用者新增／移除角色）**：JWT 中的 RoleIds 是簽發時快照。舊 Token 不會自動包含新角色，也不會自動移除舊角色。此情境才需要刷新 Token，或讓 Menu API 依已驗證的 UserId 從權威資料來源取得最新有效 RoleIds。
+- **RoleStatusChanged（角色啟用／停用）**：目前選單 SQL 沒有 JOIN `ARM_ROLES` 檢查角色的 `IS_ACTIVE`。應確認停用角色不會因舊 JWT Role Claim 而繼續貢獻選單；可在選單查詢中排除停用角色，或由服務端先取得最新有效 RoleIds。
+- **ActionRequirementChanged（API 門檻異動）**：目前選單 SQL 主要依 `ARM_PERMISSIONS` 的 Read Bit 判斷顯示，沒有直接查詢 `ARM_ACTION_DEF`。因此 Action 門檻異動是否改變選單呈現，須依實際 UI 規則決定；它仍可能需要使授權快取失效，但不能假設一定改變選單內容。
 
-不可只清除 MenuCache 而忽略 JWT 角色快照問題。
+另外，以上「重新呼叫 Menu API」的前提是確實打到 API。子系統的 `MenuCacheService` 目前另有以 UserId 為 Key、TTL 5 分鐘的本機快取；快取命中時不會呼叫 Menu API。因此移除 SignalR 後，仍須讓 MenuCache 透過 `perm_ver:{userId}` 察覺相關異動，才能在下一次取用時丟棄舊選單並重新呼叫 API。
+
+實作時不要把所有權限異動都當成 JWT RoleIds 過期。應只有角色集合／角色有效狀態來源改變時，才處理 Role Claims 的新鮮度；角色權限內容異動則由重新查詢 Oracle 的權限表反映。
 
 ### Phase 5：ARM L1 Cache 版本比對
 
@@ -166,7 +173,8 @@ B. Menu API 以已驗證的 UserId 查詢最新有效 RoleIds，不再以 Access
 - [ ] ARM L1 Cache 命中時會比對版本。
 - [ ] Valkey 版本查詢失敗時，受保護請求確實 fail-closed。
 - [ ] 權限異動後，即使節點漏收任何通知，下一次請求仍不會使用舊授權。
-- [ ] Token 角色快照更新策略已實作並通過測試。
+- [ ] UserRoleChanged 的角色集合變動已處理 JWT Role Claims 新鮮度。
+- [ ] RoleStatusChanged 不會讓停用角色透過舊 JWT Role Claim 繼續顯示選單。
 - [ ] 多節點測試通過：節點 A 寫入權限異動，節點 B 不接收任何推播，仍能在下一次請求察覺版本變更。
 
 完成後才移除：
@@ -199,7 +207,9 @@ B. Menu API 以已驗證的 UserId 查詢最新有效 RoleIds，不再以 Access
 | SignalR 斷線或完全停用 | 不影響權限正確性 |
 | WebAPI 節點重啟 | 本機快取重建時取得最新版本 |
 | Valkey 無法讀取版本 | 受保護請求 fail-closed |
-| 舊 Access Token 仍帶舊 RoleIds | 必須依 Phase 4 策略更新 Token 或由 Menu API 讀取最新角色 |
+| 既有 Role 的 PERMS_BITS 異動 | 重新呼叫 Menu API 即讀取 Oracle 最新 ARM_PERMISSIONS；不因這種異動單獨刷新 Token |
+| UserRoleChanged 後舊 Access Token 仍帶舊 RoleIds | 必須更新 Token，或由 Menu API 依 UserId 取得最新有效角色 |
+| RoleStatusChanged 後舊 JWT 仍含停用 RoleId | Menu API 必須排除停用角色，避免舊 Claim 讓選單殘留 |
 
 ---
 
