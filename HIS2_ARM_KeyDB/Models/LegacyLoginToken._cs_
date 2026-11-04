@@ -1,0 +1,18 @@
+﻿using System;
+
+namespace HIS2_ARM_KeyDB.Models
+{
+    /// <summary>
+    /// 【過渡期專用】對應 Oracle HIS2USER2.HIS2_LOGIN_TOKEN 資料表的實體模型
+    /// 💡 用於 Dapper ORM 映射查詢結果。
+    /// </summary>
+    public class LegacyLoginToken
+    {
+        public string USER_ID { get; set; } = string.Empty;
+        public string USER_IP { get; set; } = string.Empty;
+        public decimal LOGIN_ID { get; set; }
+        public DateTime LOGIN_TIME { get; set; }
+        public DateTime LOGOUT_TIME { get; set; }
+        public string LOGIN_TOKEN { get; set; } = string.Empty;
+    }
+}

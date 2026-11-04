@@ -1,0 +1,77 @@
+{
+  "ConnectionStrings": {
+    "Oracle": "User Id=HIS2USER2;Password=REPLACE_ME;Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=192.168.1.10)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=HISORACLE)))",
+    "KeyDb":  "192.168.1.20:6379,password=REPLACE_ME,defaultDatabase=1,connectTimeout=5000"
+  },
+  "SignalR": {
+    "ArmHubUrl": "https://xxx.xxx.xxx.xxx/armhub"
+  },  
+  "Arm": {
+    "DefaultSystemId": "HIS2_ARM_V2",
+    "RedisDbIndex": 1
+  },
+  "ForwardedHeaders": {
+    "KnownProxies": [
+      "xx.xx.xx.xx"
+    ],
+    "KnownNetworks": [
+      "172.16.0.0/12"  // Docker 內部虛擬網段
+    ]
+  },
+  "LegacySettings": {
+    "TimeZoneId": "Asia/Taipei",
+    "LogoutMinutes": 480
+  },
+  "Jwt": {
+    "SecretKey":           "REPLACE_WITH_256BIT_RANDOM_KEY_FOR_PRODUCTION",
+    "Issuer":              "HIS2-ARM-KeyDB",
+    "Audience":            "HIS2-Services",
+    "AccessExpireMinutes": "60",
+    "RefreshExpireDays":   "7"
+  },
+  "DiscoveryOptions": {
+    "ExcludeControllers": []
+  },
+  "Swagger": {
+    "Enabled": true
+  },
+  "Bootstrap": {
+    "Enabled": true,
+    "DefaultAdminUserId": "auxo",
+    "DefaultAdminPassword": "Admin@12345",
+    "DefaultAdminRoleId": "SysAdmin",
+    "DefaultSystems": [
+      { "SystemId": "HIS2_ARM", "SystemName": "ARM 集中認證授權服務", "SortValue": 1 },
+      { "SystemId": "HIS2_ARM_V2", "SystemName": "ARM 權限管控中心 (V2)", "SortValue": 2 },
+      { "SystemId": "HIS2_INP", "SystemName": "住院系統",            "SortValue": 10 },
+    ]
+  },
+  "PermFilter": {
+    "PublicActions": [
+      "User.Login",
+      "User.Logout",
+      "User.Refresh",
+      "User.JwtValidation",
+      "User.ChangePassword",
+      "Bootstrap.Init",
+      "Bootstrap.Status",
+      "UserMgr.GetRoles"
+    ],
+    "AuthenticatedBypassActions": [
+      "User.GetActionPerms"
+    ]
+  },
+  "DiscoveryOptions": {
+    "ExcludeControllers": [ "User", "UserMgr", "PermMgr", "Bootstrap" ]
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "Microsoft.Hosting.Lifetime": "Information"
+      }
+    }
+  },
+  "AllowedHosts": "*"
+}

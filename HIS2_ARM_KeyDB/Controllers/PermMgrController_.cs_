@@ -1,0 +1,220 @@
+using HIS2_ARM_KeyDB.Attributes;
+using HIS2_ARM_KeyDB.Data;
+using HIS2_ARM_KeyDB.Models;
+using HIS2_ARM_KeyDB.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace HIS2_ARM_KeyDB.Controllers;
+
+/// <summary>
+/// 權限管理端點（需 actMgr 且具備 PermMgr Action 的對應 CRUD 權限）
+///
+/// GET  /PermMgr/GetControllerActions          → 反射掃描所有 Controller/Action
+/// GET  /PermMgr/GetRolePerms?roleId=X         → 取得某角色完整 Permission 設定
+/// POST /PermMgr/SavePermission                → 儲存單一 Permission + 抽換 KeyDB 快取
+/// POST /PermMgr/BatchSavePermissions          → 批次儲存同一 Role 的所有 Permission
+/// POST /PermMgr/ReloadCache?roleId=X          → 強制重新載入 KeyDB 快取（不改 Oracle）
+/// </summary>
+[ApiController]
+[Route("[controller]")]
+public class PermMgrController_ : ControllerBase
+{
+    private readonly ControllerDiscoveryService _discovery;
+    private readonly OracleDbService            _oracle;
+    private readonly PermissionService          _perm;
+    private readonly ILogger<PermMgrController_> _logger;
+
+    public PermMgrController_(
+        ControllerDiscoveryService discovery,
+        OracleDbService oracle,
+        PermissionService perm,
+        ILogger<PermMgrController_> logger)
+    {
+        _discovery = discovery;
+        _oracle    = oracle;
+        _perm      = perm;
+        _logger    = logger;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // GET /PermMgr/GetControllerActions
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 反射掃描取得所有已掛載的 Controller 及其 Action 清單
+    /// 供管理 UI 初始載入，讓管理者知道有哪些 Controller/Action 可以設定
+    ///
+    /// 包含外部專案（HIS2_MRA 等）掛載到同一 WebApplication 的 Controller
+    /// </summary>
+    [HttpGet("GetControllerActions")]
+    [AuthorizeAction(CrudBit.R)]
+    public IActionResult GetControllerActions()
+    {
+        var result = _discovery.Discover();
+        return Ok(ApiResult.Ok(result));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // GET /PermMgr/GetRolePerms?roleId=actCoder
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 取得某角色目前在 Oracle 中的完整 Permission 配置
+    /// 包含 Controller 天花板（ACTION_NAME IS NULL）和 Action 微調層
+    /// </summary>
+    [HttpGet("GetRolePerms")]
+    [AuthorizeAction(CrudBit.R)]
+    public async Task<IActionResult> GetRolePerms([FromQuery] string roleId)
+    {
+        if (string.IsNullOrWhiteSpace(roleId))
+            return BadRequest(ApiResult.Fail(400, "roleId 為必填"));
+
+        var perms = await _oracle.GetPermissionsFullAsync(roleId);
+        return Ok(ApiResult.Ok(new
+        {
+            RoleId      = roleId,
+            TotalRows   = perms.Count,
+            Permissions = perms
+        }));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // POST /PermMgr/SavePermission
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 儲存單一 Permission 並立即抽換 KeyDB 快取
+    ///
+    /// 流程：
+    ///   1. 驗證 Controller 是否存在（防止誤設不存在的路由）
+    ///   2. Oracle MERGE INTO（新增或更新）
+    ///   3. Pub/Sub 推播 → 所有節點 DEL role_perms:{roleId}
+    ///   4. Oracle 重新查詢 BITAND 有效位元
+    ///   5. HMSET 回 KeyDB（本節點立即預熱）
+    ///
+    /// 效果：儲存後下一個 Request 立即拿到新權限，不需等 Cache Miss 週期
+    /// </summary>
+    [HttpPost("SavePermission")]
+    [AuthorizeAction(CrudBit.U)]
+    public async Task<IActionResult> SavePermission([FromBody] SavePermissionRequest req)
+    {
+        // 驗證 Controller 是否存在於已掛載路由
+        if (!_discovery.ControllerExists(req.Controller))
+            return BadRequest(ApiResult.Fail(400,
+                $"Controller '{req.Controller}' 不存在，請先確認目標專案已掛載"));
+
+        // 若指定 ActionName，驗證是否存在
+        if (!string.IsNullOrEmpty(req.ActionName))
+        {
+            var actions = _discovery.GetActions(req.Controller);
+            if (!actions.Contains(req.ActionName, StringComparer.OrdinalIgnoreCase))
+                return BadRequest(ApiResult.Fail(400,
+                    $"Action '{req.ActionName}' 在 {req.Controller} 中不存在"));
+        }
+
+        // 驗證位元值範圍
+        if (req.PermsBits < 0 || req.PermsBits > 31)
+            return BadRequest(ApiResult.Fail(400, "PermsBits 必須在 0~31 之間"));
+
+        // Oracle 儲存
+        var ok = await _oracle.UpsertPermissionAsync(
+            req.RoleId, req.Controller, req.ActionName, req.PermsBits, req.IsActive);
+
+        if (!ok)
+            return StatusCode(500, ApiResult.Fail(500, "Oracle 儲存失敗"));
+
+        // 抽換 KeyDB 快取（Pub/Sub DEL + 重新預熱）
+        await _perm.ReloadRolePermsAsync(req.RoleId);
+
+        _logger.LogInformation(
+            "[PermMgr] SavePermission: role={Role} ctrl={Ctrl} action={Action} bits={Bits}",
+            req.RoleId, req.Controller, req.ActionName ?? "*", req.PermsBits);
+
+        return Ok(ApiResult.Ok(new
+        {
+            req.RoleId,
+            req.Controller,
+            ActionName   = req.ActionName ?? "*(Controller 天花板)",
+            req.PermsBits,
+            CacheUpdated = true
+        }, "Permission 已儲存並更新快取"));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // POST /PermMgr/BatchSavePermissions
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 批次儲存同一 Role 的所有 Permission（管理 UI 按「儲存全部」時呼叫）
+    ///
+    /// 同一 transaction 完成後，只需一次 ReloadRolePermsAsync
+    /// </summary>
+    [HttpPost("BatchSavePermissions")]
+    [AuthorizeAction(CrudBit.U)]
+    public async Task<IActionResult> BatchSavePermissions([FromBody] BatchSavePermissionsRequest req)
+    {
+        if (req.Permissions is null || req.Permissions.Count == 0)
+            return BadRequest(ApiResult.Fail(400, "Permissions 不可為空"));
+
+        // 驗證所有 Controller/Action
+        foreach (var p in req.Permissions)
+        {
+            if (!_discovery.ControllerExists(p.Controller))
+                return BadRequest(ApiResult.Fail(400,
+                    $"Controller '{p.Controller}' 不存在"));
+
+            if (!string.IsNullOrEmpty(p.ActionName))
+            {
+                var actions = _discovery.GetActions(p.Controller);
+                if (!actions.Contains(p.ActionName, StringComparer.OrdinalIgnoreCase))
+                    return BadRequest(ApiResult.Fail(400,
+                        $"Action '{p.ActionName}' 在 {p.Controller} 中不存在"));
+            }
+
+            if (p.PermsBits < 0 || p.PermsBits > 31)
+                return BadRequest(ApiResult.Fail(400,
+                    $"PermsBits={p.PermsBits} 超出範圍（{p.Controller}.{p.ActionName}）"));
+        }
+
+        // Oracle 批次儲存
+        var ok = await _oracle.BatchUpsertPermissionsAsync(req.RoleId, req.Permissions);
+        if (!ok)
+            return StatusCode(500, ApiResult.Fail(500, "Oracle 批次儲存失敗"));
+
+        // 一次 ReloadRolePermsAsync（Pub/Sub DEL + 重新預熱）
+        await _perm.ReloadRolePermsAsync(req.RoleId);
+
+        _logger.LogInformation(
+            "[PermMgr] BatchSavePermissions: role={Role} count={Count}",
+            req.RoleId, req.Permissions.Count);
+
+        return Ok(ApiResult.Ok(new
+        {
+            req.RoleId,
+            SavedCount   = req.Permissions.Count,
+            CacheUpdated = true
+        }, $"已批次儲存 {req.Permissions.Count} 筆 Permission 並更新快取"));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // POST /PermMgr/ReloadCache?roleId=actCoder
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 強制重新載入指定 Role 的 KeyDB 快取（不修改 Oracle）
+    /// 適用：手動修改 Oracle 資料後，或排查快取不一致問題時
+    /// </summary>
+    [HttpPost("ReloadCache")]
+    [AuthorizeAction(CrudBit.U)]
+    public async Task<IActionResult> ReloadCache([FromQuery] string roleId)
+    {
+        if (string.IsNullOrWhiteSpace(roleId))
+            return BadRequest(ApiResult.Fail(400, "roleId 為必填"));
+
+        await _perm.ReloadRolePermsAsync(roleId);
+
+        _logger.LogInformation("[PermMgr] ReloadCache: roleId={RoleId}", roleId);
+        return Ok(ApiResult.Ok(new { RoleId = roleId, CacheUpdated = true },
+            $"role_perms:{roleId} 快取已重新載入"));
+    }
+}

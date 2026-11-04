@@ -1,0 +1,18 @@
+﻿# === .NET Core / .NET 8 通用忽略規則 ===
+# 忽略所有層級下的 bin 與 obj 資料夾
+[Bb]in/
+[Oo]bj/
+[Ll]ogs/
+[Pp]ublish/
+
+# 忽略 IDE 產生的資料夾
+.idea/
+.vs/
+
+# === HIS2_ARM_KeyDB 專案特定規則 ===
+/HIS2_ARM_KeyDB/appsettings*.json
+
+# === ArmPassCalc 專案特定規則 ===
+/ArmPassCalc/appsettings*.json
+!/ArmPassCalc/appsettings.json.template
+/ArmPassCalc/ArmPassCalc.csproj.user  # 通常是 .user 檔才忽略，csproj 本身應該要進版控

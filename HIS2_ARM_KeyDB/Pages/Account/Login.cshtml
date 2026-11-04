@@ -1,0 +1,141 @@
+﻿@page
+@model HIS2_ARM_KeyDB.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "HIS2 ARM 權限管控中心 - 系統登入";
+    // 假設您已經有一個引入了 Bootstrap 5 與 jQuery 的 _Layout.cshtml
+    Layout = "_Layout"; 
+}
+
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="card shadow-lg border-0" style="width: 100%; max-width: 450px; border-radius: 12px;">
+        <div class="card-header bg-primary text-white text-center py-4" style="border-top-left-radius: 12px; border-top-right-radius: 12px;">
+            <h4 class="mb-0 fw-bold">HIS2 權限管控中心</h4>
+            <small class="text-white-50">Access Rights Management</small>
+        </div>
+        
+        <div class="card-body p-4 p-md-5">
+            <div id="alertBox" class="alert alert-danger d-none" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <span id="alertMessage"></span>
+            </div>
+
+            <form id="loginForm">
+                <input type="hidden" id="ReturnUrl" value="@Model.ReturnUrl" />
+
+                <div class="form-floating mb-4">
+                    <input type="text" class="form-control" id="UserId" placeholder="請輸入員工編號" required autocomplete="username">
+                    <label for="UserId">員工編號 (User ID)</label>
+                </div>
+
+                <div class="form-floating mb-4">
+                    <input type="password" class="form-control" id="Password" placeholder="請輸入密碼" required autocomplete="current-password">
+                    <label for="Password">系統密碼 (Password)</label>
+                </div>
+
+                <button type="submit" id="btnLogin" class="btn btn-primary w-100 py-3 fw-bold fs-5">
+                    <span id="loginSpinner" class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true"></span>
+                    <span id="loginText">登入系統</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            'use strict';
+
+            // 💡 取得跨環境 (本機 YARP / 正式 F5) 的基礎 API 路徑
+            const getBaseUrl = () => {
+                return (window.__CONFIG__ && window.__CONFIG__.armBaseUrl) 
+                    ? window.__CONFIG__.armBaseUrl 
+                    : ''; // fallback 改為空字串，代表相對根目錄
+            };
+
+            const $form = $('#loginForm');
+            const $btn = $('#btnLogin');
+            const $spinner = $('#loginSpinner');
+            const $text = $('#loginText');
+            const $alertBox = $('#alertBox');
+            const $alertMessage = $('#alertMessage');
+
+            // 鎖定 UI 狀態的輔助函式
+            const setUiLoading = (isLoading) => {
+                $btn.prop('disabled', isLoading);
+                if (isLoading) {
+                    $spinner.removeClass('d-none');
+                    $text.text('驗證中...');
+                    $alertBox.addClass('d-none');
+                } else {
+                    $spinner.addClass('d-none');
+                    $text.text('登入系統');
+                }
+            };
+
+            // 綁定表單送出事件
+            $form.on('submit', function (e) {
+                e.preventDefault(); // 阻止傳統網頁重載的 Form Submit
+
+                const userId = $('#UserId').val().trim();
+                const password = $('#Password').val();
+                let returnUrl = $('#ReturnUrl').val();
+                
+                // 若未指定目標路徑，預設導向首頁或管理後台
+                if (!returnUrl || returnUrl === '') {
+                    returnUrl = '/';
+                }
+
+                setUiLoading(true);
+
+                // 💡 [架構特徵：BFF 登入交握]
+                // 呼叫 AuthController。成功時瀏覽器會自動收下 HttpOnly Cookie，
+                // 前端只會拿到包含過期時間與使用者資訊的 Metadata。
+                $.ajax({
+                    url: `${getBaseUrl()}/api/v1/Auth/login`,
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ userId: userId, password: password }),
+                    xhrFields: {
+                        withCredentials: true // 確保即使跨域也能寫入/讀取 Cookie
+                    },
+                    success: function (response) {
+                        // 1. 將後端回傳的 Metadata 交給我們寫好的狀態機進行保管並啟動心跳
+                        if (typeof ArmAuthManager !== 'undefined') {
+                            ArmAuthManager.setSession(response);
+                        } else {
+                            console.warn('[ARM Auth] 找不到全域狀態機 (ArmAuthManager)，請確認 _Layout.cshtml 已正確引入 arm-auth.js');
+                        }
+
+                        // 2. 顯示成功狀態並執行重導
+                        $btn.removeClass('btn-primary').addClass('btn-success');
+                        $text.text('登入成功，轉址中...');
+                        
+                        // 延遲一小段時間讓使用者看見成功狀態，隨後導向目標頁面
+                        setTimeout(() => {
+                            window.location.replace(returnUrl);
+                        }, 500);
+                    },
+                    error: function (xhr) {
+                        setUiLoading(false);
+                        
+                        // 解析後端回傳的詳細錯誤訊息
+                        let errorMsg = '發生未知的系統錯誤，請聯絡資訊室。';
+                        if (xhr.responseJSON && xhr.responseJSON.Detail) {
+                            errorMsg = xhr.responseJSON.Detail;
+                        } else if (xhr.status === 401) {
+                            errorMsg = '帳號或密碼輸入錯誤，請重新確認。';
+                        }
+                        
+                        // 顯示錯誤警示框
+                        $alertMessage.text(errorMsg);
+                        $alertBox.removeClass('d-none');
+                        
+                        // 清空密碼欄位並將焦點移回密碼框，提升使用者體驗
+                        $('#Password').val('').focus();
+                    }
+                });
+            });
+        });
+    </script>
+}

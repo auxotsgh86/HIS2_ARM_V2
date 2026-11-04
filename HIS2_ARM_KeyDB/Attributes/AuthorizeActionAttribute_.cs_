@@ -1,0 +1,130 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using HIS2_ARM_KeyDB.Services;
+using System.Security.Claims;
+
+namespace HIS2_ARM_KeyDB.Filters;
+
+/// <summary>
+/// 【HIS2 ARM 動態權限攔截器標記】
+/// 
+/// 運作原理：
+/// 採用 AOP (切面導向程式設計) 概念，這只是一個「無參數」的空標記。
+/// 它會將請求轉交給 <see cref="AuthorizeActionFilter"/> 進行實質的動態權限比對。
+/// 我們不再將權限門檻（如 CrudBit.U）寫死在程式碼編譯檔中，而是交由 Oracle (ARM_ACTION_DEF) 與 KeyDB 動態決定。
+/// 
+/// 使用方式：
+/// 1. 整個 Controller 保護：在 Controller 類別上方掛上 [AuthorizeAction]
+/// 2. 單一 API 保護：在特定的 Action 方法上方掛上 [AuthorizeAction]
+/// 
+/// 範例：
+/// [ApiController]
+/// [Route("api/v1/op/[controller]")]
+/// [AuthorizeAction] // <--- 只需要掛這行，不用帶任何參數
+/// public class PatientController : ControllerBase { ... }
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
+public class AuthorizeActionAttribute : TypeFilterAttribute
+{
+    public AuthorizeActionAttribute() : base(typeof(AuthorizeActionFilter))
+    {
+    }
+}
+
+/// <summary>
+/// 【動態權限過濾器實作核心】
+/// 
+/// 運作原理與執行 Pipeline：
+/// 1. 身份識別：確認 Request 帶有合法的 JWT Token，並解析出 UserId。
+/// 2. 系統識別：讀取 HttpContext.Items["SystemId"] (由 SystemIdResolver 中間件於路由初期寫入，如 HIS2_INP)。
+/// 3. 節點識別：利用 ASP.NET Core 的 RouteData，動態解析出當前請求的 ControllerName 與 ActionName。
+/// 4. 聯集與位元運算：呼叫 PermissionService 大腦，從 KeyDB 快取中比對該 API 的 REQUIRED_BITS 與使用者的 PERMS_BITS。
+/// 5. 決策：若位元交集 (UserBits & RequiredBits) 吻合，則放行；否則拋出 403 Forbidden。
+/// </summary>
+public class AuthorizeActionFilter : IAsyncAuthorizationFilter
+{
+    private readonly PermissionService _permissionService;
+    private readonly ILogger<AuthorizeActionFilter> _logger;
+
+    public AuthorizeActionFilter(PermissionService permissionService, ILogger<AuthorizeActionFilter> logger)
+    {
+        _permissionService = permissionService;
+        _logger = logger;
+    }
+
+    public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
+    {
+        var httpContext = context.HttpContext;
+
+        // =========================================================================
+        // STEP 1: 基本身分驗證 (Authentication)
+        // 確認使用者是否已登入且 Token 未過期
+        // =========================================================================
+        if (httpContext.User?.Identity?.IsAuthenticated != true)
+        {
+            _logger.LogWarning("授權攔截：使用者未登入或 Token 無效。");
+            context.Result = new UnauthorizedResult(); // 回傳 HTTP 401
+            return;
+        }
+
+        // 從 JWT Claim (Payload) 中提取使用者代號 (對應 TokenService 簽發的 "sub")
+        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                  ?? httpContext.User.FindFirst("sub")?.Value;
+
+        if (string.IsNullOrEmpty(userId))
+        {
+            _logger.LogWarning("授權攔截：無法從 Token 提取 UserId。");
+            context.Result = new UnauthorizedResult();
+            return;
+        }
+
+        // =========================================================================
+        // STEP 2: 系統來源識別 (System Dimension)
+        // 依賴於 SystemIdResolver 中間件，它必須在 Filter 執行前，
+        // 透過 URL 路徑 (如 /HIS2_OP/...) 解析出 SystemId 並塞入 Items 中。
+        // =========================================================================
+        if (!httpContext.Items.TryGetValue("SystemId", out var sysIdObj) || sysIdObj is not string systemId)
+        {
+            _logger.LogWarning("授權攔截：無法從 HttpContext 取得 SystemId，請確認 SystemIdResolver 已註冊且執行順序正確。");
+            context.Result = new ObjectResult(new { error = "無法辨識 HIS2 子系統來源，拒絕存取" }) { StatusCode = 403 };
+            return;
+        }
+
+        // =========================================================================
+        // STEP 3: API 節點動態解析 (Target Node)
+        // 利用 MVC 的路由資料，精準捕捉目前呼叫的是哪一個 Controller 與 Action
+        // 例如呼叫 /api/v1/inp/Patient/Update -> controller="Patient", action="Update"
+        // =========================================================================
+        var routeData = context.RouteData.Values;
+        var controllerName = routeData["controller"]?.ToString();
+        var actionName = routeData["action"]?.ToString();
+
+        if (string.IsNullOrEmpty(controllerName) || string.IsNullOrEmpty(actionName))
+        {
+            _logger.LogWarning("授權攔截：無法解析 RouteData 中的 Controller ({Ctrl}) 或 Action ({Act}) 名稱。", controllerName, actionName);
+            context.Result = new ForbidResult(); // 回傳 HTTP 403
+            return;
+        }
+
+        // =========================================================================
+        // STEP 4: 呼叫權限中樞大腦 (Data-Driven Verification)
+        // 將收集到的 (UserId, SystemId, ControllerName, ActionName) 交給 PermissionService。
+        // 它會去 KeyDB 查詢 ARM_ACTION_DEF 的 REQUIRED_BITS 與 ARM_PERMISSIONS 的 PERMS_BITS 進行位元交集運算。
+        // =========================================================================
+        bool isAuthorized = await _permissionService.HasPermissionAsync(userId, systemId, controllerName, actionName);
+
+        // =========================================================================
+        // STEP 5: 決策與阻擋 (Decision)
+        // =========================================================================
+        if (!isAuthorized)
+        {
+            _logger.LogInformation("授權失敗：使用者 {UserId} 嘗試存取 {SystemId}.{Controller}.{Action} 權限不足。", 
+                userId, systemId, controllerName, actionName);
+            
+            // 拒絕存取，前端會收到 403 Forbidden，不可進入 API 內部邏輯
+            context.Result = new ForbidResult();
+        }
+        
+        // 若 isAuthorized 為 true，則什麼都不做，Pipeline 會自動放行進入下一層 (Controller Action)
+    }
+}

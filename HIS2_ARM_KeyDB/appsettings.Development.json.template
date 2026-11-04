@@ -1,0 +1,18 @@
+{
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Debug"
+    }
+  },
+  "SignalR": {
+    "ArmHubUrl": "https://xxx.xxx.xxx.xxx/armhub"
+  },
+  "ForwardedHeaders": {
+    "KnownProxies": [
+      "127.0.0.1"
+    ],
+    "KnownNetworks": [
+      "172.16.0.0/12"  // Docker 內部虛擬網段
+    ]
+  }
+}

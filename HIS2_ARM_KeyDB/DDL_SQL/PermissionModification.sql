@@ -1,0 +1,29 @@
+-- 一次對某個系統的所有 ROLE_ID 添加某項基本權限
+INSERT INTO HIS2USER2.ARM_PERMISSIONS (
+    PERMISSION_ID,
+    SYSTEM_ID,
+    ROLE_ID,
+    CONTROLLER,
+    ACTION_NAME,
+    PERMS_BITS,
+    IS_DC,
+    IS_ACTIVE,
+    CREATE_USER,
+    CREATE_TIME
+)
+SELECT
+    RAWTOHEX(SYS_GUID()),
+    :SYSTEM_ID,
+    ap.ROLE_ID,
+    :CONTROLLER,
+    :ACTION_NAME,                 -- 建議也參數化（可傳 NULL）
+    :PERMS_BITS,
+    'N',
+    'Y',
+    :CREATE_USER,
+    SYSDATE
+FROM (
+         SELECT DISTINCT ROLE_ID
+         FROM HIS2USER2.ARM_PERMISSIONS
+         WHERE SYSTEM_ID = :SYSTEM_ID
+     ) ap;

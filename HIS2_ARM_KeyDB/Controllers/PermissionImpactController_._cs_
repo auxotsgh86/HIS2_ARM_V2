@@ -1,0 +1,59 @@
+﻿using HIS2_ARM_KeyDB.Models.PermissionImpact;
+using HIS2_ARM_KeyDB.Services.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+
+namespace HIS2_ARM_KeyDB.Controllers;
+
+[ApiController]
+[Route("api/permissions/affected-users")]
+public sealed class PermissionImpactController
+    : ControllerBase
+{
+    private readonly IPermissionImpactService _service;
+
+    public PermissionImpactController(
+        IPermissionImpactService service)
+    {
+        _service = service;
+    }
+
+    /// <summary>
+    /// Role → UserIds
+    /// </summary>
+    [HttpPost("by-roles")]
+    public async Task<ActionResult<AffectedUsersByRolesResponse>>
+        GetUsersByRoles(
+            [FromBody] AffectedUsersByRolesRequest request,
+            CancellationToken cancellationToken)
+    {
+        var userIds =
+            await _service.GetAffectedUserIdsByRolesAsync(
+                request.RoleIds,
+                cancellationToken);
+
+        return Ok(new AffectedUsersByRolesResponse
+        {
+            UserIds = userIds.ToArray()
+        });
+    }
+
+    /// <summary>
+    /// Action → Role → UserIds
+    /// </summary>
+    [HttpPost("by-actions")]
+    public async Task<ActionResult<AffectedUsersByActionsResponse>>
+        GetUsersByActions(
+            [FromBody] AffectedUsersByActionsRequest request,
+            CancellationToken cancellationToken)
+    {
+        var userIds =
+            await _service.GetAffectedUserIdsByActionsAsync(
+                request.Actions,
+                cancellationToken);
+
+        return Ok(new AffectedUsersByActionsResponse
+        {
+            UserIds = userIds.ToArray()
+        });
+    }
+}

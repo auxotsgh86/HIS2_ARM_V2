@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <!-- 💡 加上這個 ItemGroup 來引入 ASP.NET Core 框架 -->
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <!-- 因為有用到 HttpClientFactory，可能需要額外安裝這個 NuGet 套件 (視您的 .NET 版本而定) -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.29" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+        <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.22.0" />
+        <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
+        <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    </ItemGroup>
+</Project>

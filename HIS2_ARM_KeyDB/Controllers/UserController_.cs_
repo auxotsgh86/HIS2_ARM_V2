@@ -1,0 +1,91 @@
+using HIS2_ARM_KeyDB.Attributes;
+using HIS2_ARM_KeyDB.Models;
+using HIS2_ARM_KeyDB.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace HIS2_ARM_KeyDB.Controllers;
+
+[ApiController]
+[Route("[controller]")]
+public class UserController : ControllerBase
+{
+    private readonly AuthService       _auth;
+    private readonly PermissionService _perm;
+
+    public UserController(AuthService auth, PermissionService perm)
+    { _auth = auth; _perm = perm; }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest req)
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = Request.Headers.UserAgent.ToString();
+        var (ok, resp, err) = await _auth.LoginAsync(req, ip, ua);
+        return ok ? Ok(ApiResult.Ok(resp)) : Unauthorized(ApiResult.Fail(401, err!));
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var token = Bearer();
+        if (token is null) return BadRequest(ApiResult.Fail(400, "缺少 Bearer Token"));
+        await _auth.LogoutAsync(token);
+        return Ok(ApiResult.Ok(null, "已成功登出"));
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh([FromBody] RefreshRequest req)
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var ua = Request.Headers.UserAgent.ToString();
+        var (ok, resp, err) = await _auth.RefreshAsync(req.RefreshToken, ip, ua);
+        return ok ? Ok(ApiResult.Ok(resp)) : Unauthorized(ApiResult.Fail(401, err!));
+    }
+
+    /// <summary>驗證 Token（供下游服務呼叫）</summary>
+    [HttpGet("JwtValidation")]
+    public async Task<IActionResult> JwtValidation()
+    {
+        var token = Bearer();
+        if (token is null)
+            return Ok(ApiResult.Ok(new JwtValidationResponse(false, null, "缺少 Bearer Token")));
+        return Ok(ApiResult.Ok(await _auth.ValidateAsync(token)));
+    }
+
+    /// <summary>
+    /// 查詢使用者對指定 Action 的可用操作（供前端渲染按鈕）
+    ///
+    /// GET /User/GetActionPerms?controller=Record&amp;action=ManageRecord
+    /// 回應: { effectiveBits: 22, allowedOps: ["R","U","P"] }
+    ///
+    /// 前端依 allowedOps 決定顯示哪些按鈕：
+    ///   C=新增  R=查詢  U=修改  D=刪除  P=列印
+    /// </summary>
+    [HttpGet("GetActionPerms")]
+    public async Task<IActionResult> GetActionPerms(
+        [FromQuery] string controller, [FromQuery] string action)
+    {
+        var token = Bearer();
+        if (token is null) return Unauthorized(ApiResult.Fail(401, "缺少 Bearer Token"));
+
+        var v = await _auth.ValidateAsync(token);
+        if (!v.IsValid) return Unauthorized(ApiResult.Fail(401, v.Message!));
+
+        var bits    = await _perm.GetEffectiveBitsAsync(v.UserId!, controller, action);
+        var allowed = new List<string>();
+        if (CrudBit.Has(bits, CrudBit.C)) allowed.Add("C");
+        if (CrudBit.Has(bits, CrudBit.R)) allowed.Add("R");
+        if (CrudBit.Has(bits, CrudBit.U)) allowed.Add("U");
+        if (CrudBit.Has(bits, CrudBit.D)) allowed.Add("D");
+        if (CrudBit.Has(bits, CrudBit.P)) allowed.Add("P");
+
+        return Ok(ApiResult.Ok(new ActionPermResponse(controller, action, bits, allowed)));
+    }
+
+    private string? Bearer()
+    {
+        var h = Request.Headers.Authorization.ToString();
+        return h.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? h["Bearer ".Length..].Trim() : null;
+    }
+}

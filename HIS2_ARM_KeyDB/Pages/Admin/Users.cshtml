@@ -1,0 +1,107 @@
+﻿@page
+@model HIS2_ARM_KeyDB.Pages.Admin.UsersModel
+@{
+    ViewData["Title"] = "人員管理";
+}
+
+<div class="container-fluid mt-4">
+    <!-- 系統操作狀態回饋 -->
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+            <i class="bi bi-check-circle-fill"></i> @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-people-fill text-primary"></i> 系統人員管理</h2>
+        <!-- 透過 Tag Helper 導向獨立的 CreateUser 頁面，保持本頁內聚力 -->
+        <a asp-page="./CreateUser" class="btn btn-success shadow-sm">
+            <i class="bi bi-person-plus"></i> 新增人員
+        </a>
+    </div>
+
+    <!-- 搜尋區塊 -->
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body bg-light rounded">
+            <form method="get" class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <label class="col-form-label fw-bold text-secondary">搜尋員工代號：</label>
+                </div>
+                <div class="col-md-4">
+                    <input type="text" asp-for="SearchUserId" class="form-control" placeholder="輸入 USER_ID..." />
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> 搜尋</button>
+                    <a href="/Admin/Users" class="btn btn-outline-secondary">清除</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 列表區塊 -->
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <table class="table table-hover table-striped align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="ps-4">員工代號 (User ID)</th>
+                        <th>姓名</th>
+                        <th>部門</th>
+                        <th>狀態</th>
+                        <th>建立時間</th>
+                        <th>最後登入時間</th>
+                        <th class="text-center">操作 (業務路由)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Users.Any())
+                    {
+                        @foreach (var user in Model.Users)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-bold text-primary">@user.UserId</td>
+                                <td>@user.Username</td>
+                                <td><span class="badge bg-secondary">@user.Department</span></td>
+                                <td>
+                                    @if (user.IsActive)
+                                    {
+                                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> 啟用</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> 停用</span>
+                                    }
+                                </td>
+                                <td>@user.CreatedAt.ToString("yyyy/MM/dd HH:mm")</td>
+                                <td>@(user.LastLoginAt?.ToString("yyyy/MM/dd HH:mm") ?? "-")</td>
+                                <td class="text-center">
+                                    <!-- 透過 asp-route-id 動態綁定路由參數 -->
+                                    <div class="btn-group shadow-sm" role="group">
+                                        <a asp-page="./EditUser" asp-route-id="@user.UserId" class="btn btn-sm btn-outline-primary" title="編輯基本資料">
+                                            <i class="bi bi-pencil-square"></i> 編輯
+                                        </a>
+                                        <a asp-page="./AssignRoles" asp-route-id="@user.UserId" class="btn btn-sm btn-outline-info" title="配置系統角色">
+                                            <i class="bi bi-shield-check"></i> 角色
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-3 text-secondary"></i>
+                                <h5>找不到符合條件的使用者</h5>
+                                <p class="mb-0">請嘗試調整搜尋條件，或點擊上方新增人員。</p>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

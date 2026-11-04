@@ -1,0 +1,57 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - HIS2 ARM 權限管理系統</title>
+    
+    <link rel="stylesheet" href="~/lib/bootstrap-5.0.2/css/bootstrap.min.css" />
+    <link rel="icon" type="image/x-icon" href="/favicon-arm.ico">
+</head>
+<body class="bg-light">
+    
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/"><i class="bi bi-shield-lock-fill"></i> HIS2_ARM</a>
+        <div class="collapse navbar-collapse">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/Admin/Users">人員管理</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/Admin/ActionDefs">功能門檻定義</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/Admin/PermMatrix">角色權限矩陣</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<main role="main" class="container-fluid px-4 pb-5">
+    @RenderBody()
+</main>
+
+<footer class="text-center text-muted py-3 mt-auto">
+    <small>&copy; 2026 - 三軍總醫院 資訊中心 HIS2_ARM_KEYDB</small>
+</footer>
+
+<script src="~/lib/jquery-4.0.0.min.js"></script>
+
+<script src="~/lib/bootstrap-5.0.2/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    window.__CONFIG__ = {
+        // 由於這裡是 ARM 中心自己的後台，通常直接用空字串或相對路徑。
+        // 若是部署在 F5 的子目錄，可配合 appsettings 輸出。
+        armBaseUrl: '/ArmV2' 
+    };
+</script>
+
+<script src="~/js/arm-auth.js"></script>
+
+@await RenderSectionAsync("Scripts", required: false)
+
+</body>
+</html>

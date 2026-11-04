@@ -1,0 +1,1384 @@
+﻿@page
+@model HIS2_ARM_KeyDB.Pages.Admin.PermMatrixModel
+@{
+    ViewData["Title"] = "ARM 管理工作台 - 角色權限";
+}
+
+<style>
+    .arm-workbench {
+        display: flex;
+        gap: 0;
+        min-height: calc(100vh - 140px);
+        background: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.08);
+    }
+
+    .arm-sidebar {
+        width: 280px;
+        min-width: 280px;
+        border-right: 1px solid #dee2e6;
+        background: #f8f9fa;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .arm-sidebar-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #dee2e6;
+        background: #212529;
+        color: #fff;
+    }
+
+    .arm-sidebar-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .arm-sidebar-header small {
+        opacity: 0.65;
+    }
+
+    .arm-ops {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .arm-ops .list-group-item {
+        border: none;
+        border-radius: 6px !important;
+        padding: 0.55rem 0.75rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        background: transparent;
+    }
+
+    .arm-ops .list-group-item:hover {
+        background: #e9ecef;
+    }
+
+    .arm-ops .list-group-item.active {
+        background: #0d6efd;
+        color: #fff;
+    }
+
+    .arm-ops .list-group-item.disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+
+    .arm-role-search {
+        padding: 0.75rem 1rem 0.5rem;
+    }
+
+    .arm-role-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 0.5rem 0.75rem;
+    }
+
+    .arm-role-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        color: #212529;
+        cursor: pointer;
+    }
+
+    .arm-role-item:hover {
+        background: #e9ecef;
+    }
+
+    .arm-role-item.active {
+        background: #cfe2ff;
+        color: #084298;
+        font-weight: 600;
+    }
+
+    .arm-role-item .role-id {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.8rem;
+    }
+
+    .arm-role-item .role-name {
+        color: #6c757d;
+        font-size: 0.75rem;
+    }
+
+    .arm-role-item.active .role-name {
+        color: #084298;
+    }
+
+    .arm-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: #fff;
+    }
+
+    .arm-main-header {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .arm-main-header .role-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .arm-main-header .role-title .text-muted {
+        font-weight: 400;
+        font-size: 0.9rem;
+    }
+
+    .arm-tabs {
+        padding: 0 1.5rem;
+        border-bottom: 1px solid #dee2e6;
+        background: #fafafa;
+    }
+
+    .arm-tabs .nav-link {
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        color: #6c757d;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .arm-tabs .nav-link.active {
+        color: #0d6efd;
+        border-bottom-color: #0d6efd;
+        background: transparent;
+        font-weight: 600;
+    }
+
+    .arm-tabs .nav-link.disabled {
+        opacity: 0.5;
+    }
+
+    .arm-work-area {
+        flex: 1;
+        padding: 1.25rem 1.5rem;
+        overflow: auto;
+    }
+
+    .arm-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: end;
+        margin-bottom: 1rem;
+    }
+
+    .arm-toolbar .form-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+    }
+
+    .perm-table th {
+        white-space: nowrap;
+        font-size: 0.8rem;
+        vertical-align: middle;
+    }
+
+    .perm-table td {
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+
+    .perm-bit-cell {
+        text-align: center;
+        min-width: 3.5rem;
+    }
+
+    .perm-bit-cell .form-check {
+        display: inline-flex;
+        justify-content: center;
+        margin: 0;
+    }
+
+    .perm-bit-cell .form-check-input {
+        cursor: pointer;
+        width: 1.15em;
+        height: 1.15em;
+    }
+
+    .perm-row-dirty {
+        background-color: #fff3cd !important;
+    }
+
+    .arm-empty {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6c757d;
+    }
+
+    .arm-empty .empty-icon {
+        font-size: 2.5rem;
+        opacity: 0.35;
+        margin-bottom: 0.75rem;
+    }
+
+    .arm-footer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #dee2e6;
+        margin-top: 1rem;
+    }
+
+    .badge-dirty {
+        font-size: 0.7rem;
+        vertical-align: middle;
+    }
+
+    #roleListStatus, #matrixStatus, #memberStatus, #candidateStatus {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .member-table td, .candidate-table td {
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+
+    .arm-users-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+    }
+</style>
+
+<div class="arm-workbench">
+    @* ───────────── 左欄 ───────────── *@
+    <aside class="arm-sidebar">
+        <div class="arm-sidebar-header">
+            <h5>ARM 管理</h5>
+            <small>Access Rights Management</small>
+        </div>
+
+        <div class="arm-ops">
+            <div class="text-uppercase text-muted mb-2" style="font-size: 0.7rem; letter-spacing: 0.04em;">操作</div>
+            <div class="list-group list-group-flush">
+                <button type="button" class="list-group-item list-group-item-action active" data-op="role-perm" id="opRolePerm">
+                    角色權限
+                </button>
+                <button type="button" class="list-group-item list-group-item-action disabled" data-op="action-perm" title="開發中" disabled>
+                    Action 權限 <span class="badge bg-secondary ms-1">開發中</span>
+                </button>
+                <button type="button" class="list-group-item list-group-item-action disabled" data-op="user-mgr" title="開發中" disabled>
+                    使用者管理 <span class="badge bg-secondary ms-1">開發中</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="arm-role-search">
+            <div class="text-uppercase text-muted mb-2" style="font-size: 0.7rem; letter-spacing: 0.04em;">搜尋角色</div>
+            <div class="input-group input-group-sm">
+                <input type="search" class="form-control" id="roleKeyword" placeholder="RoleId / 名稱" autocomplete="off" />
+                <button class="btn btn-outline-secondary" type="button" id="btnSearchRole" title="搜尋">🔍</button>
+            </div>
+            <div id="roleListStatus" class="mt-1"></div>
+        </div>
+
+        <div class="arm-role-list" id="roleList">
+            <div class="arm-empty py-4">
+                <div class="empty-icon">👤</div>
+                <div>輸入關鍵字搜尋角色</div>
+            </div>
+        </div>
+    </aside>
+
+    @* ───────────── 右欄 ───────────── *@
+    <section class="arm-main">
+        <div class="arm-main-header">
+            <h1 class="role-title" id="mainTitle">
+                <span class="text-muted">請先從左側選擇角色</span>
+            </h1>
+            <div id="saveHint" class="d-none">
+                <span class="badge bg-warning text-dark badge-dirty">有未儲存變更</span>
+            </div>
+        </div>
+
+        <ul class="nav arm-tabs" id="mainTabs">
+            <li class="nav-item">
+                <button class="nav-link active" data-tab="perm" type="button" id="tabPerm">權限設定</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-tab="users" type="button" id="tabUsers">使用者</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link disabled" data-tab="basic" type="button" disabled>基本資料 <span class="badge bg-secondary">開發中</span></button>
+            </li>
+        </ul>
+
+        <div class="arm-work-area" id="workArea">
+            @* 未選角色 *@
+            <div id="panelEmpty" class="arm-empty">
+                <div class="empty-icon">←</div>
+                <div class="fw-semibold mb-1">尚未選擇角色</div>
+                <div>在左側搜尋並點選角色後，即可設定該角色的權限矩陣。</div>
+            </div>
+
+            @* 權限設定 *@
+            <div id="panelPerm" class="d-none">
+                <div class="arm-toolbar">
+                    <div style="min-width: 200px; flex: 1;">
+                        <label class="form-label" for="systemSelect">System</label>
+                        <select class="form-select form-select-sm" id="systemSelect">
+                            <option value="">— 請選擇系統 —</option>
+                        </select>
+                    </div>
+                    <div style="min-width: 180px;">
+                        <label class="form-label" for="controllerFilter">Controller</label>
+                        <select class="form-select form-select-sm" id="controllerFilter">
+                            <option value="">全部</option>
+                        </select>
+                    </div>
+                    <div class="ms-auto">
+                        <label class="form-label d-block">&nbsp;</label>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadMatrix" disabled>重新載入</button>
+                    </div>
+                </div>
+
+                <div id="matrixStatus" class="mb-2"></div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-bordered perm-table mb-0" id="permTable">
+                        <thead class="table-light" id="permTableHead">
+                            @* 表頭由 permission-bits 動態產生 *@
+                        </thead>
+                        <tbody id="permTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="matrixEmpty" class="arm-empty d-none py-4">
+                    <div>此系統尚無 Action 定義，或該角色尚無權限列。</div>
+                    <div class="small mt-1">可先至「Action 權限」註冊拓撲，或直接在此儲存以建立權限列。</div>
+                </div>
+
+                <div class="arm-footer-actions">
+                    <button type="button" class="btn btn-outline-secondary" id="btnCancel" disabled>取消</button>
+                    <button type="button" class="btn btn-primary" id="btnSave" disabled>
+                        <span class="spinner-border spinner-border-sm d-none me-1" id="saveSpinner" role="status"></span>
+                        儲存變更
+                    </button>
+                </div>
+            </div>
+
+            @* 使用者（角色成員） *@
+            <div id="panelUsers" class="d-none">
+                <div class="arm-users-toolbar">
+                    <div class="input-group input-group-sm" style="max-width: 280px;">
+                        <input type="search" class="form-control" id="memberKeyword" placeholder="搜尋成員 UserId / 姓名" autocomplete="off" />
+                        <button class="btn btn-outline-secondary" type="button" id="btnSearchMembers">🔍</button>
+                    </div>
+                    <span id="memberStatus"></span>
+                    <button type="button" class="btn btn-sm btn-primary ms-auto" id="btnOpenAddMembers">
+                        ＋ 加入成員
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-bordered member-table mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">UserId</th>
+                                <th>姓名</th>
+                                <th>單位</th>
+                                <th class="text-center">啟用</th>
+                                <th class="text-center" style="width: 100px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="memberTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="memberEmpty" class="arm-empty d-none py-4">
+                    <div>此角色目前沒有成員。</div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <div class="small text-muted" id="memberPageInfo"></div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" id="btnMemberPrev" disabled>上一頁</button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnMemberNext" disabled>下一頁</button>
+                    </div>
+                </div>
+            </div>
+
+            @* 其他分頁佔位 *@
+            <div id="panelSoon" class="d-none arm-empty">
+                <div class="empty-icon">🚧</div>
+                <div class="fw-semibold">開發中</div>
+                <div>此分頁將於後續版本開放。</div>
+            </div>
+        </div>
+    </section>
+</div>
+
+@* 加入成員 Modal *@
+<div class="modal fade" id="addMembersModal" tabindex="-1" aria-labelledby="addMembersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addMembersModalLabel">加入成員</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">搜尋尚未屬於此角色的使用者，勾選後一次加入。</p>
+                <div class="input-group input-group-sm mb-2">
+                    <input type="search" class="form-control" id="candidateKeyword" placeholder="UserId / 姓名 / 單位" autocomplete="off" />
+                    <button class="btn btn-outline-secondary" type="button" id="btnSearchCandidates">搜尋</button>
+                </div>
+                <div id="candidateStatus" class="mb-2"></div>
+                <div class="table-responsive" style="max-height: 360px;">
+                    <table class="table table-sm table-hover candidate-table mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 40px;"><input type="checkbox" class="form-check-input" id="chkCandidateAll" title="全選本頁" /></th>
+                                <th>UserId</th>
+                                <th>姓名</th>
+                                <th>單位</th>
+                            </tr>
+                        </thead>
+                        <tbody id="candidateTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <div class="small text-muted" id="candidatePageInfo"></div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" id="btnCandidatePrev" disabled>上一頁</button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnCandidateNext" disabled>下一頁</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span class="me-auto small text-muted" id="candidateSelectedHint">已選 0 人</span>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmAddMembers" disabled>
+                    <span class="spinner-border spinner-border-sm d-none me-1" id="addMemberSpinner"></span>
+                    加入選取的使用者
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Toast *@
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+    <div id="armToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="armToastBody"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    'use strict';
+
+    // ─────────────────────────────────────────────────────────
+    // 基礎
+    // ─────────────────────────────────────────────────────────
+    const baseUrl = () =>
+        (window.__CONFIG__ && window.__CONFIG__.armBaseUrl)
+            ? window.__CONFIG__.armBaseUrl.replace(/\/$/, '')
+            : '';
+
+    const api = (path) => `${baseUrl()}${path.startsWith('/') ? path : '/' + path}`;
+
+    function ajax(options) {
+        return $.ajax($.extend({
+            contentType: 'application/json',
+            dataType: 'json',
+            xhrFields: { withCredentials: true }
+        }, options));
+    }
+
+    function showToast(message, ok) {
+        const $t = $('#armToast');
+        $t.removeClass('bg-success bg-danger').addClass(ok ? 'bg-success' : 'bg-danger');
+        $('#armToastBody').text(message);
+        const toast = bootstrap.Toast.getOrCreateInstance($t[0], { delay: 3500 });
+        toast.show();
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 狀態（不寫死任何 CRUDP code）
+    // ─────────────────────────────────────────────────────────
+    @* /** @type {{ bit: number, code: string, name: string, sortOrder?: number }[]} */ *@
+    let permissionBits = [];
+
+    @* /** @type {{ roleId: string, roleName: string } | null} */ *@
+    let selectedRole = null;
+
+    @* /** @type {string} */ *@
+    let selectedSystemId = '';
+
+    @* /** *@
+    @*  * 合併後的矩陣列 *@
+    @*  * @type {{ key: string, controller: string, actionName: string|null, description: string, originalBits: number, currentBits: number }[]} *@
+    @*  */ *@
+    let matrixRows = [];
+
+    let roleSearchTimer = null;
+    let rolesPage = 1;
+    const rolesPageSize = 30;
+
+    /** 目前右欄分頁：perm | users */
+    let activeTab = 'perm';
+
+    // 成員列表
+    let memberPage = 1;
+    const memberPageSize = 20;
+    let memberTotal = 0;
+    let memberSearchTimer = null;
+
+    // 候選（加入成員）
+    let candidatePage = 1;
+    const candidatePageSize = 20;
+    let candidateTotal = 0;
+    let candidateSearchTimer = null;
+    @* /** @type {Set<string>} */ *@
+    const selectedCandidateIds = new Set();
+    let addMembersModal = null;
+
+    // ─────────────────────────────────────────────────────────
+    // Permission bits：唯一真實來源
+    // ─────────────────────────────────────────────────────────
+    function loadPermissionBits() {
+        return ajax({ url: api('/api/Admin/permission-bits'), type: 'GET' })
+            .then(function (data) {
+                permissionBits = Array.isArray(data) ? data.slice() : [];
+                permissionBits.sort(function (a, b) {
+                    const sa = a.sortOrder != null ? a.sortOrder : a.bit;
+                    const sb = b.sortOrder != null ? b.sortOrder : b.bit;
+                    return sa - sb;
+                });
+                renderTableHead();
+            })
+            .catch(function (xhr) {
+                showToast('無法載入權限位元定義：' + errText(xhr), false);
+            });
+    }
+
+    function bitsFromFlags(flags) {
+        if (!Array.isArray(flags)) return 0;
+        let n = 0;
+        flags.forEach(function (f) {
+            if (f.value) n |= (f.bit | 0);
+        });
+        return n;
+    }
+
+    /** 依目前勾選的 bit 組成後端可接受的 permissions 字串（codes 串接，例如 "CRU"） */
+    function permissionsStringFromBits(bits) {
+        const codes = [];
+        permissionBits.forEach(function (def) {
+            if ((bits & def.bit) !== 0) codes.push(def.code);
+        });
+        return codes.length ? codes.join('') : 'None';
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 角色搜尋
+    // ─────────────────────────────────────────────────────────
+    function searchRoles(resetPage) {
+        if (resetPage) rolesPage = 1;
+        const keyword = ($('#roleKeyword').val() || '').trim();
+        $('#roleListStatus').text('搜尋中…');
+
+        const qs = $.param({
+            keyword: keyword || undefined,
+            page: rolesPage,
+            pageSize: rolesPageSize
+        });
+
+        return ajax({ url: api('/api/admin/Roles?' + qs), type: 'GET' })
+            .then(function (data) {
+                const items = (data && data.items) ? data.items : [];
+                const total = (data && data.totalCount != null) ? data.totalCount : items.length;
+                renderRoleList(items, total);
+            })
+            .catch(function (xhr) {
+                $('#roleListStatus').text('');
+                $('#roleList').html('<div class="text-danger small p-2">載入失敗：' + errText(xhr) + '</div>');
+            });
+    }
+
+    function renderRoleList(items, total) {
+        const $list = $('#roleList');
+        $list.empty();
+
+        if (!items.length) {
+            $list.html('<div class="arm-empty py-3"><div class="small">查無角色</div></div>');
+            $('#roleListStatus').text(total ? '共 ' + total + ' 筆' : '');
+            return;
+        }
+
+        items.forEach(function (r) {
+            const id = r.roleId || r.RoleId || '';
+            const name = r.roleName || r.RoleName || '';
+            const active = selectedRole && selectedRole.roleId === id;
+            const $btn = $('<button type="button" class="arm-role-item' + (active ? ' active' : '') + '"/>');
+            $btn.append($('<div class="role-id"/>').text(id));
+            if (name) $btn.append($('<div class="role-name"/>').text(name));
+            $btn.on('click', function () {
+                selectRole(id, name);
+            });
+            $list.append($btn);
+        });
+
+        $('#roleListStatus').text('顯示 ' + items.length + (total > items.length ? ' / 共 ' + total : '') + ' 筆');
+    }
+
+    function selectRole(roleId, roleName) {
+        if (hasDirty() && !confirm('目前有未儲存的權限變更，確定要切換角色嗎？')) {
+            return;
+        }
+        selectedRole = { roleId: roleId, roleName: roleName || '' };
+        $('#roleList .arm-role-item').each(function () {
+            const rid = $(this).find('.role-id').text();
+            $(this).toggleClass('active', rid === roleId);
+        });
+        $('#mainTitle').html(
+            '角色：<span class="font-monospace">' + escapeHtml(roleId) + '</span>' +
+            (roleName ? ' <span class="text-muted">（' + escapeHtml(roleName) + '）</span>' : '')
+        );
+        $('#panelEmpty').addClass('d-none');
+        clearDirty();
+        matrixRows = [];
+        renderMatrixBody();
+        memberPage = 1;
+        showTab(activeTab, true);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 分頁切換
+    // ─────────────────────────────────────────────────────────
+    function showTab(tab, forceReload) {
+        if (!selectedRole) {
+            $('#panelEmpty').removeClass('d-none');
+            $('#panelPerm, #panelUsers, #panelSoon').addClass('d-none');
+            return;
+        }
+
+        activeTab = tab;
+        $('#mainTabs .nav-link').removeClass('active');
+        if (tab === 'perm') $('#tabPerm').addClass('active');
+        if (tab === 'users') $('#tabUsers').addClass('active');
+
+        $('#panelEmpty, #panelPerm, #panelUsers, #panelSoon').addClass('d-none');
+
+        if (tab === 'perm') {
+            $('#panelPerm').removeClass('d-none');
+            if (forceReload && selectedSystemId) loadMatrix();
+            else if (forceReload) {
+                matrixRows = [];
+                renderMatrixBody();
+                $('#matrixStatus').text('');
+            }
+        } else if (tab === 'users') {
+            $('#panelUsers').removeClass('d-none');
+            if (forceReload) loadMembers(true);
+        } else {
+            $('#panelSoon').removeClass('d-none');
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 角色成員
+    // ─────────────────────────────────────────────────────────
+    function loadMembers(resetPage) {
+        if (!selectedRole) return;
+        if (resetPage) memberPage = 1;
+
+        const keyword = ($('#memberKeyword').val() || '').trim();
+        $('#memberStatus').text('載入中…');
+
+        const qs = $.param({
+            roleId: selectedRole.roleId,
+            keyword: keyword || undefined,
+            page: memberPage,
+            pageSize: memberPageSize
+        });
+
+        return ajax({
+            url: api('/api/admin/UserMgr/GetUserData?' + qs),
+            type: 'GET'
+        }).then(function (data) {
+            const items = (data && data.items) ? data.items : [];
+            memberTotal = (data && data.totalCount != null) ? data.totalCount : items.length;
+            renderMembers(items);
+            $('#memberStatus').text('');
+            updateMemberPager();
+        }).catch(function (xhr) {
+            $('#memberStatus').text('');
+            $('#memberTableBody').html(
+                '<tr><td colspan="5" class="text-danger p-3">載入失敗：' + escapeHtml(errText(xhr)) + '</td></tr>'
+            );
+            $('#memberEmpty').addClass('d-none');
+        });
+    }
+
+    function renderMembers(items) {
+        const $body = $('#memberTableBody');
+        $body.empty();
+
+        if (!items.length) {
+            $('#memberEmpty').removeClass('d-none');
+            $('.member-table').addClass('d-none');
+            return;
+        }
+
+        $('#memberEmpty').addClass('d-none');
+        $('.member-table').removeClass('d-none');
+
+        items.forEach(function (u) {
+            const uid = u.userId || u.UserId || '';
+            const name = u.username || u.Username || '';
+            const dept = u.department || u.Department || '';
+            const active = u.isActive != null ? u.isActive : u.IsActive;
+            const roleIds = u.roleIds || u.RoleIds || [];
+
+            const $tr = $('<tr/>');
+            $tr.append($('<td class="ps-3 font-monospace small"/>').text(uid));
+            $tr.append($('<td/>').text(name));
+            $tr.append($('<td class="small text-muted"/>').text(dept));
+            $tr.append(
+                $('<td class="text-center"/>').html(
+                    active === true || active === 'Y' || active === 1
+                        ? '<span class="badge bg-success">Y</span>'
+                        : '<span class="badge bg-secondary">N</span>'
+                )
+            );
+            const $btn = $('<button type="button" class="btn btn-sm btn-outline-danger">移除</button>');
+            $btn.on('click', function () {
+                removeMember(uid, name, dept, active, roleIds);
+            });
+            $tr.append($('<td class="text-center"/>').append($btn));
+            $body.append($tr);
+        });
+    }
+
+    function updateMemberPager() {
+        const totalPages = Math.max(1, Math.ceil(memberTotal / memberPageSize) || 1);
+        $('#memberPageInfo').text(
+            memberTotal
+                ? ('第 ' + memberPage + ' / ' + totalPages + ' 頁，共 ' + memberTotal + ' 人')
+                : ''
+        );
+        $('#btnMemberPrev').prop('disabled', memberPage <= 1);
+        $('#btnMemberNext').prop('disabled', memberPage >= totalPages || memberTotal === 0);
+    }
+
+    /**
+     * 從角色移除：以 UpdOneUser 重寫該使用者的 RoleIds（去掉目前角色）。
+     * 沒有專用 RemoveFromRole API，故沿用既有更新路徑。
+     */
+    function removeMember(userId, username, department, isActive, roleIds) {
+        if (!selectedRole) return;
+        if (!confirm('確定將「' + userId + '」移出角色 ' + selectedRole.roleId + '？')) return;
+
+        const roleId = selectedRole.roleId;
+        const nextRoles = (Array.isArray(roleIds) ? roleIds : [])
+            .filter(function (r) {
+                return String(r).toUpperCase() !== String(roleId).toUpperCase();
+            });
+
+        const body = {
+            username: username || userId,
+            roleIds: nextRoles,
+            department: department || '',
+            isActive: isActive === true || isActive === 'Y' || isActive === 1
+        };
+
+        ajax({
+            url: api('/api/admin/UserMgr/UpdOneUser?' + $.param({ userId: userId })),
+            type: 'POST',
+            data: JSON.stringify(body)
+        }).then(function () {
+            showToast('已將 ' + userId + ' 移出角色（已排入 Outbox）', true);
+            loadMembers(false);
+        }).catch(function (xhr) {
+            showToast('移除失敗：' + errText(xhr), false);
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 加入成員（候選名單）
+    // ─────────────────────────────────────────────────────────
+    function openAddMembersModal() {
+        if (!selectedRole) return;
+        selectedCandidateIds.clear();
+        candidatePage = 1;
+        $('#candidateKeyword').val('');
+        $('#chkCandidateAll').prop('checked', false);
+        updateCandidateSelectedHint();
+        loadCandidates(true);
+        if (!addMembersModal) {
+            addMembersModal = new bootstrap.Modal(document.getElementById('addMembersModal'));
+        }
+        addMembersModal.show();
+        $('#addMembersModalLabel').text('加入成員 — ' + selectedRole.roleId);
+    }
+
+    function loadCandidates(resetPage) {
+        if (!selectedRole) return;
+        if (resetPage) candidatePage = 1;
+
+        const keyword = ($('#candidateKeyword').val() || '').trim();
+        $('#candidateStatus').text('搜尋中…');
+
+        const qs = $.param({
+            excludeRoleId: selectedRole.roleId,
+            keyword: keyword || undefined,
+            page: candidatePage,
+            pageSize: candidatePageSize
+        });
+
+        return ajax({
+            url: api('/api/admin/UserMgr/GetUserData?' + qs),
+            type: 'GET'
+        }).then(function (data) {
+            const items = (data && data.items) ? data.items : [];
+            candidateTotal = (data && data.totalCount != null) ? data.totalCount : items.length;
+            renderCandidates(items);
+            $('#candidateStatus').text(items.length ? '' : '查無符合條件的使用者');
+            updateCandidatePager();
+        }).catch(function (xhr) {
+            $('#candidateStatus').text('載入失敗：' + errText(xhr));
+            $('#candidateTableBody').empty();
+        });
+    }
+
+    function renderCandidates(items) {
+        const $body = $('#candidateTableBody');
+        $body.empty();
+        let pageAllChecked = items.length > 0;
+
+        items.forEach(function (u) {
+            const uid = u.userId || u.UserId || '';
+            const name = u.username || u.Username || '';
+            const dept = u.department || u.Department || '';
+            const checked = selectedCandidateIds.has(uid);
+            if (!checked) pageAllChecked = false;
+
+            const $tr = $('<tr/>');
+            const $cb = $('<input type="checkbox" class="form-check-input candidate-cb"/>')
+                .prop('checked', checked)
+                .attr('data-uid', uid);
+            $cb.on('change', function () {
+                if (this.checked) selectedCandidateIds.add(uid);
+                else selectedCandidateIds.delete(uid);
+                updateCandidateSelectedHint();
+                syncCandidateAllCheckbox();
+            });
+            $tr.append($('<td/>').append($cb));
+            $tr.append($('<td class="font-monospace small"/>').text(uid));
+            $tr.append($('<td/>').text(name));
+            $tr.append($('<td class="small text-muted"/>').text(dept));
+            $body.append($tr);
+        });
+
+        $('#chkCandidateAll').prop('checked', pageAllChecked && items.length > 0);
+    }
+
+    function syncCandidateAllCheckbox() {
+        const $cbs = $('#candidateTableBody .candidate-cb');
+        if (!$cbs.length) {
+            $('#chkCandidateAll').prop('checked', false);
+            return;
+        }
+        let all = true;
+        $cbs.each(function () {
+            if (!this.checked) all = false;
+        });
+        $('#chkCandidateAll').prop('checked', all);
+    }
+
+    function updateCandidateSelectedHint() {
+        const n = selectedCandidateIds.size;
+        $('#candidateSelectedHint').text('已選 ' + n + ' 人');
+        $('#btnConfirmAddMembers').prop('disabled', n === 0);
+    }
+
+    function updateCandidatePager() {
+        const totalPages = Math.max(1, Math.ceil(candidateTotal / candidatePageSize) || 1);
+        $('#candidatePageInfo').text(
+            candidateTotal
+                ? ('第 ' + candidatePage + ' / ' + totalPages + ' 頁，共 ' + candidateTotal + ' 人')
+                : ''
+        );
+        $('#btnCandidatePrev').prop('disabled', candidatePage <= 1);
+        $('#btnCandidateNext').prop('disabled', candidatePage >= totalPages || candidateTotal === 0);
+    }
+
+    function confirmAddMembers() {
+        if (!selectedRole || selectedCandidateIds.size === 0) return;
+
+        const userIds = Array.from(selectedCandidateIds);
+        $('#btnConfirmAddMembers').prop('disabled', true);
+        $('#addMemberSpinner').removeClass('d-none');
+
+        ajax({
+            url: api('/api/admin/UserMgr/AssignUsersToRole'),
+            type: 'POST',
+            data: JSON.stringify({
+                roleId: selectedRole.roleId,
+                userIds: userIds
+            })
+        }).then(function (res) {
+            const msg = (res && (res.message || res.Message))
+                ? (res.message || res.Message)
+                : ('已加入 ' + userIds.length + ' 人');
+            showToast(msg, true);
+            selectedCandidateIds.clear();
+            if (addMembersModal) addMembersModal.hide();
+            loadMembers(true);
+        }).catch(function (xhr) {
+            showToast('加入失敗：' + errText(xhr), false);
+            $('#btnConfirmAddMembers').prop('disabled', selectedCandidateIds.size === 0);
+        }).always(function () {
+            $('#addMemberSpinner').addClass('d-none');
+            updateCandidateSelectedHint();
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // System 下拉
+    // ─────────────────────────────────────────────────────────
+    function loadSystems() {
+        return ajax({
+            url: api('/api/Admin/systems?' + $.param({ page: 1, pageSize: 200, includeInactive: false })),
+            type: 'GET'
+        }).then(function (data) {
+            const items = (data && data.items) ? data.items : [];
+            const $sel = $('#systemSelect');
+            $sel.find('option:not(:first)').remove();
+            items.forEach(function (s) {
+                const id = s.systemId || s.SystemId || '';
+                const name = s.systemName || s.SystemName || id;
+                $sel.append($('<option/>').val(id).text(id + (name && name !== id ? ' — ' + name : '')));
+            });
+        }).catch(function (xhr) {
+            showToast('無法載入系統清單：' + errText(xhr), false);
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 矩陣：合併 Actions 拓撲 + 角色既有權限
+    // ─────────────────────────────────────────────────────────
+    function loadMatrix() {
+        if (!selectedRole || !selectedSystemId) return;
+
+        $('#matrixStatus').text('載入中…');
+        $('#btnReloadMatrix').prop('disabled', true);
+
+        const roleId = selectedRole.roleId;
+        const systemId = selectedSystemId;
+
+        const pActions = ajax({
+            url: api('/api/Admin/actions?' + $.param({ systemId: systemId })),
+            type: 'GET'
+        });
+        const pPerms = ajax({
+            url: api('/api/admin/Roles/' + encodeURIComponent(roleId) + '/permissions?' + $.param({ systemId: systemId })),
+            type: 'GET'
+        });
+
+        return $.when(pActions, pPerms)
+            .then(function (actionsRes, permsRes) {
+                const actions = Array.isArray(actionsRes[0]) ? actionsRes[0] : (Array.isArray(actionsRes) ? actionsRes : []);
+                const perms = Array.isArray(permsRes[0]) ? permsRes[0] : (Array.isArray(permsRes) ? permsRes : []);
+
+                const permMap = {};
+                perms.forEach(function (p) {
+                    const ctrl = p.controller || p.Controller || '';
+                    const act = p.actionName != null ? p.actionName : (p.ActionName != null ? p.ActionName : null);
+                    const key = rowKey(ctrl, act);
+                    const bits = (p.permsBits != null) ? p.permsBits
+                        : (p.PermsBits != null) ? p.PermsBits
+                        : bitsFromFlags(p.flags || p.Flags);
+                    permMap[key] = bits | 0;
+                });
+
+                matrixRows = [];
+                if (actions.length) {
+                    actions.forEach(function (a) {
+                        const ctrl = a.controller || a.Controller || '';
+                        const act = a.actionName != null ? a.actionName : (a.ActionName != null ? a.ActionName : null);
+                        const desc = a.description || a.Description || a.actionName || act || '';
+                        const key = rowKey(ctrl, act);
+                        const bits = permMap[key] != null ? permMap[key] : 0;
+                        matrixRows.push({
+                            key: key,
+                            controller: ctrl,
+                            actionName: act,
+                            description: desc,
+                            originalBits: bits,
+                            currentBits: bits
+                        });
+                    });
+                } else {
+                    // 無 Action 拓撲時，至少顯示角色既有權限列
+                    perms.forEach(function (p) {
+                        const ctrl = p.controller || p.Controller || '';
+                        const act = p.actionName != null ? p.actionName : (p.ActionName != null ? p.ActionName : null);
+                        const bits = (p.permsBits != null) ? p.permsBits
+                            : (p.PermsBits != null) ? p.PermsBits
+                            : bitsFromFlags(p.flags || p.Flags);
+                        matrixRows.push({
+                            key: rowKey(ctrl, act),
+                            controller: ctrl,
+                            actionName: act,
+                            description: '',
+                            originalBits: bits | 0,
+                            currentBits: bits | 0
+                        });
+                    });
+                }
+
+                // Controller 下拉
+                const controllers = [];
+                matrixRows.forEach(function (r) {
+                    if (r.controller && controllers.indexOf(r.controller) < 0) controllers.push(r.controller);
+                });
+                controllers.sort();
+                const $cf = $('#controllerFilter');
+                const prev = $cf.val();
+                $cf.find('option:not(:first)').remove();
+                controllers.forEach(function (c) {
+                    $cf.append($('<option/>').val(c).text(c));
+                });
+                if (prev && controllers.indexOf(prev) >= 0) $cf.val(prev);
+                else $cf.val('');
+
+                clearDirty();
+                renderMatrixBody();
+                $('#matrixStatus').text('共 ' + matrixRows.length + ' 個 Action');
+            })
+            .fail(function (xhr) {
+                $('#matrixStatus').text('');
+                showToast('載入權限矩陣失敗：' + errText(xhr), false);
+            })
+            .always(function () {
+                $('#btnReloadMatrix').prop('disabled', !selectedSystemId);
+            });
+    }
+
+    function rowKey(controller, actionName) {
+        return controller + '\0' + (actionName == null ? '###NULL###' : actionName);
+    }
+
+    function renderTableHead() {
+        const $tr = $('<tr/>');
+        $tr.append('<th class="ps-3">Controller</th>');
+        $tr.append('<th>Action</th>');
+        $tr.append('<th>說明</th>');
+        permissionBits.forEach(function (b) {
+            $tr.append(
+                $('<th class="perm-bit-cell text-center"/>')
+                    .attr('title', b.name + ' (' + b.code + ', bit=' + b.bit + ')')
+                    .text(b.code)
+            );
+        });
+        $('#permTableHead').empty().append($tr);
+    }
+
+    function renderMatrixBody() {
+        const filter = $('#controllerFilter').val() || '';
+        const $body = $('#permTableBody');
+        $body.empty();
+
+        const rows = filter
+            ? matrixRows.filter(function (r) { return r.controller === filter; })
+            : matrixRows;
+
+        if (!rows.length) {
+            $('#matrixEmpty').removeClass('d-none');
+            $('#permTable').addClass('d-none');
+            updateSaveButtons();
+            return;
+        }
+
+        $('#matrixEmpty').addClass('d-none');
+        $('#permTable').removeClass('d-none');
+
+        rows.forEach(function (r) {
+            const $tr = $('<tr/>').attr('data-key', r.key);
+            if (r.currentBits !== r.originalBits) $tr.addClass('perm-row-dirty');
+
+            $tr.append($('<td class="ps-3 font-monospace small"/>').text(r.controller));
+            $tr.append($('<td class="font-monospace small"/>').text(r.actionName == null ? '（Controller 層）' : r.actionName));
+            $tr.append($('<td class="small text-muted"/>').text(r.description || ''));
+
+            permissionBits.forEach(function (b) {
+                const checked = (r.currentBits & b.bit) !== 0;
+                const $td = $('<td class="perm-bit-cell"/>');
+                const $input = $('<input type="checkbox" class="form-check-input perm-bit"/>')
+                    .attr('data-bit', b.bit)
+                    .attr('data-code', b.code)
+                    .attr('title', b.name)
+                    .prop('checked', checked);
+                $input.on('change', function () {
+                    onBitToggle(r.key, b.bit, this.checked);
+                });
+                $td.append($('<div class="form-check"/>').append($input));
+                $tr.append($td);
+            });
+
+            $body.append($tr);
+        });
+
+        updateSaveButtons();
+    }
+
+    function onBitToggle(key, bit, on) {
+        const row = matrixRows.find(function (r) { return r.key === key; });
+        if (!row) return;
+        if (on) row.currentBits |= bit;
+        else row.currentBits &= ~bit;
+
+        $('#permTableBody tr').filter(function () {
+            return $(this).attr('data-key') === key;
+        }).toggleClass('perm-row-dirty', row.currentBits !== row.originalBits);
+        updateSaveButtons();
+    }
+
+    function hasDirty() {
+        return matrixRows.some(function (r) { return r.currentBits !== r.originalBits; });
+    }
+
+    function clearDirty() {
+        matrixRows.forEach(function (r) { r.originalBits = r.currentBits; });
+        $('#permTableBody tr').removeClass('perm-row-dirty');
+        updateSaveButtons();
+    }
+
+    function updateSaveButtons() {
+        const dirty = hasDirty();
+        $('#btnSave').prop('disabled', !dirty || !selectedRole || !selectedSystemId);
+        $('#btnCancel').prop('disabled', !dirty);
+        $('#saveHint').toggleClass('d-none', !dirty);
+        $('#btnReloadMatrix').prop('disabled', !selectedRole || !selectedSystemId);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 儲存：只送有變更的列
+    // ─────────────────────────────────────────────────────────
+    function saveChanges() {
+        if (!selectedRole || !selectedSystemId) return;
+
+        const dirty = matrixRows.filter(function (r) { return r.currentBits !== r.originalBits; });
+        if (!dirty.length) return;
+
+        $('#btnSave').prop('disabled', true);
+        $('#saveSpinner').removeClass('d-none');
+
+        // 序列送出，避免一次打爆；任一批失敗就停止
+        let chain = $.Deferred().resolve().promise();
+        let okCount = 0;
+
+        dirty.forEach(function (r) {
+            chain = chain.then(function () {
+                const body = {
+                    systemId: selectedSystemId,
+                    roleId: selectedRole.roleId,
+                    controllerName: r.controller,
+                    actionName: r.actionName,
+                    permissions: permissionsStringFromBits(r.currentBits)
+                };
+                return ajax({
+                    url: api('/api/Admin/update-role-permission'),
+                    type: 'POST',
+                    data: JSON.stringify(body)
+                }).then(function () {
+                    okCount++;
+                    r.originalBits = r.currentBits;
+                });
+            });
+        });
+
+        chain
+            .then(function () {
+                showToast('已儲存 ' + okCount + ' 筆權限變更（已排入 Outbox）', true);
+                renderMatrixBody();
+            })
+            .catch(function (xhr) {
+                showToast('儲存失敗（已成功 ' + okCount + ' 筆）：' + errText(xhr), false);
+                renderMatrixBody();
+            })
+            .always(function () {
+                $('#saveSpinner').addClass('d-none');
+                updateSaveButtons();
+            });
+    }
+
+    function cancelChanges() {
+        matrixRows.forEach(function (r) { r.currentBits = r.originalBits; });
+        renderMatrixBody();
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 工具
+    // ─────────────────────────────────────────────────────────
+    function errText(xhr) {
+        if (!xhr) return '未知錯誤';
+        if (xhr.responseJSON) {
+            return xhr.responseJSON.Detail
+                || xhr.responseJSON.detail
+                || xhr.responseJSON.Message
+                || xhr.responseJSON.message
+                || xhr.responseJSON.title
+                || JSON.stringify(xhr.responseJSON);
+        }
+        if (xhr.responseText) return xhr.responseText.substring(0, 200);
+        return 'HTTP ' + (xhr.status || '?');
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 事件綁定
+    // ─────────────────────────────────────────────────────────
+    $(function () {
+        loadPermissionBits();
+        loadSystems();
+        searchRoles(true);
+
+        $('#roleKeyword').on('input', function () {
+            clearTimeout(roleSearchTimer);
+            roleSearchTimer = setTimeout(function () { searchRoles(true); }, 300);
+        });
+        $('#btnSearchRole').on('click', function () { searchRoles(true); });
+        $('#roleKeyword').on('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchRoles(true);
+            }
+        });
+
+        $('#systemSelect').on('change', function () {
+            if (hasDirty() && !confirm('目前有未儲存的權限變更，確定要切換系統嗎？')) {
+                $(this).val(selectedSystemId);
+                return;
+            }
+            selectedSystemId = $(this).val() || '';
+            if (selectedRole && selectedSystemId) loadMatrix();
+            else {
+                matrixRows = [];
+                renderMatrixBody();
+                $('#matrixStatus').text('');
+            }
+            updateSaveButtons();
+        });
+
+        $('#controllerFilter').on('change', function () {
+            renderMatrixBody();
+        });
+
+        $('#btnReloadMatrix').on('click', function () {
+            if (hasDirty() && !confirm('目前有未儲存變更，重新載入將捨棄，確定？')) return;
+            loadMatrix();
+        });
+
+        $('#btnSave').on('click', saveChanges);
+        $('#btnCancel').on('click', cancelChanges);
+
+        // 分頁
+        $('#tabPerm').on('click', function () {
+            if (activeTab === 'perm') return;
+            if (hasDirty() && !confirm('權限設定有未儲存變更，確定要離開此分頁？')) return;
+            showTab('perm', false);
+        });
+        $('#tabUsers').on('click', function () {
+            if (activeTab === 'users') return;
+            if (hasDirty() && !confirm('權限設定有未儲存變更，確定要離開此分頁？')) return;
+            showTab('users', true);
+        });
+
+        // 成員
+        $('#memberKeyword').on('input', function () {
+            clearTimeout(memberSearchTimer);
+            memberSearchTimer = setTimeout(function () { loadMembers(true); }, 300);
+        });
+        $('#btnSearchMembers').on('click', function () { loadMembers(true); });
+        $('#btnMemberPrev').on('click', function () {
+            if (memberPage > 1) { memberPage--; loadMembers(false); }
+        });
+        $('#btnMemberNext').on('click', function () {
+            memberPage++;
+            loadMembers(false);
+        });
+        $('#btnOpenAddMembers').on('click', openAddMembersModal);
+
+        // 候選
+        $('#btnSearchCandidates').on('click', function () { loadCandidates(true); });
+        $('#candidateKeyword').on('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                loadCandidates(true);
+            }
+        });
+        $('#candidateKeyword').on('input', function () {
+            clearTimeout(candidateSearchTimer);
+            candidateSearchTimer = setTimeout(function () { loadCandidates(true); }, 300);
+        });
+        $('#btnCandidatePrev').on('click', function () {
+            if (candidatePage > 1) { candidatePage--; loadCandidates(false); }
+        });
+        $('#btnCandidateNext').on('click', function () {
+            candidatePage++;
+            loadCandidates(false);
+        });
+        $('#chkCandidateAll').on('change', function () {
+            const on = this.checked;
+            $('#candidateTableBody .candidate-cb').each(function () {
+                this.checked = on;
+                const uid = $(this).attr('data-uid');
+                if (on) selectedCandidateIds.add(uid);
+                else selectedCandidateIds.delete(uid);
+            });
+            updateCandidateSelectedHint();
+        });
+        $('#btnConfirmAddMembers').on('click', confirmAddMembers);
+
+        // 離開頁面提醒
+        $(window).on('beforeunload', function (e) {
+            if (hasDirty()) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    });
+})();
+</script>
+}

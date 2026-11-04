@@ -1,0 +1,20 @@
+﻿@page
+@model HIS2_ARM_KeyDB.Pages.Account.LogoutModel
+@{
+    // 💡 登出頁面僅執行後端重導向跳轉，無需渲染任何母版配置，將 Layout 設為 null 減少效能開銷
+    Layout = null; 
+}
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>正在登出系統...</title>
+</head>
+<body style="background-color: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+<div style="text-align: center; margin-top: 15%; color: #495057;">
+    <h2 style="font-weight: 500;">正在安全登出 HIS2 臨床資訊系統</h2>
+    <p style="color: #6c757d; margin-top: 10px;">憑證登銷中，請稍候...</p>
+</div>
+</body>
+</html>

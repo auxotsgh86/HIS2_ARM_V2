@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HIS2_ARM_KeyDB</RootNamespace>
+    <AssemblyName>HIS2_ARM_KeyDB</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"         Version="8.22.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt"               Version="8.22.0" />
+    <PackageReference Include="Oracle.ManagedDataAccess.Core"                 Version="23.4.0" />
+    <PackageReference Include="Dapper"                                         Version="2.1.35" />
+    <PackageReference Include="StackExchange.Redis"                            Version="2.7.33" />
+    <PackageReference Include="BCrypt.Net-Next"                                Version="4.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore"                         Version="6.5.0" />
+    <PackageReference Include="Serilog.AspNetCore"                             Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console"                          Version="5.0.1" />
+    <PackageReference Include="Serilog.Sinks.File"                             Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\lib\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Controllers\PermMgrController_.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HIS2_ARM_KeyDB_Client\HIS2_ARM_KeyDB_Client.csproj" />
+  </ItemGroup>
+
+</Project>

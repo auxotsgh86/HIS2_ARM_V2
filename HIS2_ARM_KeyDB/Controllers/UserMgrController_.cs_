@@ -1,0 +1,118 @@
+using HIS2_ARM_KeyDB.Attributes;
+using HIS2_ARM_KeyDB.Data;
+using HIS2_ARM_KeyDB.Models;
+using HIS2_ARM_KeyDB.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace HIS2_ARM_KeyDB.Controllers;
+
+[ApiController]
+[Route("[controller]")]
+public class UserMgrController : ControllerBase
+{
+    private readonly OracleDbService   _oracle;
+    private readonly KeyDbService      _keyDb;
+    private readonly PermissionService _perm;
+    private readonly ILogger<UserMgrController> _logger;
+
+    public UserMgrController(OracleDbService oracle, KeyDbService keyDb,
+        PermissionService perm, ILogger<UserMgrController> logger)
+    { _oracle = oracle; _keyDb = keyDb; _perm = perm; _logger = logger; }
+
+    [HttpPost("AddOneUser")]
+    [AuthorizeAction(CrudBit.C)]
+    public async Task<IActionResult> AddOneUser([FromBody] AddUserRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.UserId) || string.IsNullOrWhiteSpace(req.Password))
+            return BadRequest(ApiResult.Fail(400, "UserId 與 Password 為必填"));
+
+        var user = new User
+        {
+            UserId       = req.UserId.Trim().ToUpper(),
+            Username     = req.Username,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password, 12),
+            RoleIds      = req.RoleIds,
+            Department   = req.Department
+        };
+        var ok = await _oracle.CreateUserAsync(user);
+        if (!ok) return BadRequest(ApiResult.Fail(400, "新增失敗，帳號可能已存在"));
+        _logger.LogInformation("[UserMgr] AddOneUser: {UserId}", user.UserId);
+        return Ok(ApiResult.Ok(new { user.UserId }, "使用者已建立"));
+    }
+
+    [HttpPost("BatchAddUsers")]
+    [AuthorizeAction(CrudBit.C)]
+    public async Task<IActionResult> BatchAddUsers([FromBody] BatchAddUsersRequest req)
+    {
+        if (req.Users is null || req.Users.Count == 0)
+            return BadRequest(ApiResult.Fail(400, "使用者清單不可為空"));
+
+        var users = req.Users.Select(r => new User
+        {
+            UserId       = r.UserId.Trim().ToUpper(),
+            Username     = r.Username,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(r.Password, 12),
+            RoleIds      = r.RoleIds,
+            Department   = r.Department
+        }).ToList();
+
+        var ok = await _oracle.BatchCreateUsersAsync(users);
+        if (!ok) return BadRequest(ApiResult.Fail(400, "批次新增失敗"));
+        _logger.LogInformation("[UserMgr] BatchAddUsers: {Count}", users.Count);
+        return Ok(ApiResult.Ok(new { Count = users.Count }, $"已建立 {users.Count} 位使用者"));
+    }
+
+    [HttpGet("GetUserData")]
+    [AuthorizeAction(CrudBit.R)]
+    public async Task<IActionResult> GetUserData(
+        [FromQuery] string? userId, [FromQuery] string? roleId)
+    {
+        var users = await _oracle.GetUsersAsync(userId, roleId);
+        var result = users.Select(u => new
+        {
+            u.UserId, u.Username, u.RoleIds, u.Department,
+            u.IsActive, u.CreatedAt, u.LastLoginAt, u.LastLoginIp
+        });
+        return Ok(ApiResult.Ok(result));
+    }
+
+    [HttpPost("UpdOneUser")]
+    [AuthorizeAction(CrudBit.U)]
+    public async Task<IActionResult> UpdOneUser(
+        [FromQuery] string userId, [FromBody] UpdUserRequest req)
+    {
+        var user = new User
+        {
+            UserId     = userId,
+            Username   = req.Username,
+            RoleIds    = req.RoleIds,
+            Department = req.Department,
+            IsActive   = req.IsActive
+        };
+        var ok = await _oracle.UpdateUserAsync(user);
+        if (!ok) return BadRequest(ApiResult.Fail(400, "更新失敗"));
+
+        // 角色異動 → 清除 user_roles 快取
+        await _perm.InvalidateUserRolesAsync(userId);
+
+        if (!req.IsActive)
+            await _keyDb.RevokeAllSessionsByUserAsync(userId);
+
+        _logger.LogInformation("[UserMgr] UpdOneUser: {UserId}", userId);
+        return Ok(ApiResult.Ok(null, "使用者已更新"));
+    }
+
+    [HttpPost("DeleteOneSession")]
+    [AuthorizeAction(CrudBit.D)]
+    public async Task<IActionResult> DeleteOneSession([FromBody] DeleteOneSessionRequest req)
+    {
+        await _keyDb.DeleteOneSessionAsync(req.Jti);
+        _logger.LogInformation("[UserMgr] DeleteOneSession: {Jti}", req.Jti);
+        return Ok(ApiResult.Ok(null, $"Session {req.Jti} 已強制刪除"));
+    }
+
+    [HttpGet("GetUserSessions")]
+    [AuthorizeAction(CrudBit.R)]
+    public async Task<IActionResult> GetUserSessions([FromQuery] string userId)
+        => Ok(ApiResult.Ok(await _keyDb.GetSessionsByUserAsync(userId)));
+}

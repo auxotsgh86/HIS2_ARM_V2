@@ -1,0 +1,5 @@
+﻿{
+  "ConnectionStrings": {
+    "Oracle": "Data Source=x.x.x.x:xxxx/xxxx;User Id=xxxx;Password=xxx;"
+  }
+}
